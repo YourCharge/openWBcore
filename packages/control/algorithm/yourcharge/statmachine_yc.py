@@ -1,9 +1,11 @@
 import datetime
 import logging
 import dataclasses
+import copy
 
 from enum import Enum
 from datetime import timedelta
+from typing import Optional
 
 from control import data, yourcharge
 from control.algorithm.yourcharge.control_algorithm_yc import ControlAlgorithmYc
@@ -38,8 +40,8 @@ class StatemachineYc():
         self._internal_cp = value
         self._internal_cp_key = key
         self._wait_for_socket_idle = False
-        self._last_rfid_data = None
-        self._rfiddata_for_ev_activation = None
+        self._last_rfid_data: Optional[RfidData] = None
+        self._rfiddata_for_ev_activation: Optional[RfidData] = None
         self._valid_standard_socket_tag_found = False
         self._general_cp_handler = general_chargepoint_handler
         self._heartbeat_checker: HeartbeatChecker = HeartbeatChecker(timedelta(seconds=25))
@@ -47,10 +49,9 @@ class StatemachineYc():
             general_chargepoint_handler,
             self._status_handler, key)
         self._current_control_state = LoadControlState.Startup
-        self._wait_for_plugin_entered = None
+        self._wait_for_plugin_entered: Optional[datetime.datetime] = None
         self._control_algorithm = ControlAlgorithmYc(key, self._status_handler)
-        self._previous_plug_state = None
-        self._previous_justification = None
+        self._previous_plug_state: Optional[bool] = None
         self._last_data_update_timestamp = datetime.datetime(1, 1, 2, 0, 0, 0, tzinfo=datetime.timezone.utc)
         self._data_update_interval = timedelta(seconds=30)
         self._justification = ""
@@ -82,7 +83,9 @@ class StatemachineYc():
             # get data that we need
             self._last_rfid_data = SubData.internal_chargepoint_data["rfid_data"]
             if self._last_rfid_data is not None and self._last_rfid_data.last_tag != "":
-                self._rfiddata_for_ev_activation = self._last_rfid_data
+                self._rfiddata_for_ev_activation = copy.deepcopy(self._last_rfid_data)
+                log.error("Detected RFID scan: Setting _rfiddata_for_ev_activation to "
+                          + f"{self._rfiddata_for_ev_activation}")
                 self._status_handler.update_rfid_scan(rfid=self._last_rfid_data.last_tag, timestamp=now_it_is)
                 self._valid_standard_socket_tag_found = \
                     self._standard_socket_handler.valid_socket_rfid_scanned(self._last_rfid_data)
@@ -184,6 +187,9 @@ class StatemachineYc():
                                                         self._internal_cp.data.get.charge_state,
                                                         self._internal_cp.data.get.plug_state,
                                                         self._rfiddata_for_ev_activation.last_tag)
+                    log.error("Detected valid EV RFID-Scan while plugged in: Starting new accounting with RFID tag"
+                              + f" '{self._rfiddata_for_ev_activation.last_tag}' and meter value {meter_value_to_use}"
+                              + " then restting _rfiddata_for_ev_activation")
                     self._rfiddata_for_ev_activation = None
                 else:
                     log.error("Internal error: Detected valid RFID scan but _rfiddata_for_ev_activation is still None")
@@ -214,6 +220,10 @@ class StatemachineYc():
                                                     self._internal_cp.data.get.charge_state,
                                                     self._internal_cp.data.get.plug_state,
                                                     self._rfiddata_for_ev_activation.last_tag)
+                log.error("Detected plugin with _rfiddata_for_ev_activation: Starting new accounting with RFID tag"
+                            + f" '{self._rfiddata_for_ev_activation.last_tag}' and meter value"
+                            + f" {self._status_handler.get_cp_meter_at_last_plugin()}"
+                            + " then resetting _rfiddata_for_ev_activation")
                 self._rfiddata_for_ev_activation = None
             else:
                 log.error("Internal error: Plugin while waiting for it but _rfiddata_for_ev_activation is still None")
@@ -226,6 +236,9 @@ class StatemachineYc():
             elapsed = datetime.datetime.now(datetime.timezone.utc) - self._wait_for_plugin_entered
             if elapsed.total_seconds() >= data.data.yc_data.data.yc_config.max_plugin_wait_time_s:
                 self._wait_for_plugin_entered = None
+                log.error(f"Waiting for plugin timed out after {elapsed.total_seconds()} s: "
+                          + "Discarding _rfiddata_for_ev_activation")
+                self._rfiddata_for_ev_activation = None
                 self._status_handler.update_cp_enabled(False)
                 self._state_change(f"Waiting for plugin timed out after {elapsed.total_seconds()} s",
                                    LoadControlState.Idle, logging.WARNING)
