@@ -104,7 +104,7 @@ class StatemachineYc():
             elif not self._previous_plug_state and self._internal_cp.data.get.plug_state:
                 # transition from unplugged -> plugged -> update meter value at plugin
                 plugin = True
-                self._status_handler.update_cp_meter_at_last_plugin(self._internal_cp.data.get.imported)
+                self._status_handler.update_cp_meter_at_last_plugin(self._internal_cp.data.get)
             elif self._previous_plug_state and not self._internal_cp.data.get.plug_state:
                 # transition from plugged -> unplugged
                 plugout = True
@@ -160,9 +160,11 @@ class StatemachineYc():
             # handle slow data update
             if plugin or plugout or (now_it_is - self._last_data_update_timestamp >= self._data_update_interval):
                 self._last_data_update_timestamp = now_it_is
-                self._status_handler.update_energy_charged_today(self._internal_cp.data.get.imported)
+                self._status_handler.update_energy_charged_today(self._internal_cp.data.get.imported,
+                                                                 self._internal_cp.data.get.exported)
                 if plugin or self._internal_cp.data.get.plug_state:
                     self._status_handler.update_accounting(now_it_is, self._internal_cp.data.get.imported,
+                                                           self._internal_cp.data.get.exported,
                                                            self._internal_cp.data.get.charge_state,
                                                            self._internal_cp.data.get.plug_state)
 
@@ -182,13 +184,18 @@ class StatemachineYc():
                     meter_value_to_use = self._status_handler.get_cp_meter_at_last_plugin()
                     if meter_value_to_use is None:
                         meter_value_to_use = self._internal_cp.data.get.imported
+                    meter_value_export_to_use = self._status_handler.get_cp_meter_export_at_last_plugin()
+                    if meter_value_export_to_use is None:
+                        meter_value_export_to_use = self._internal_cp.data.get.exported
                     self._status_handler.new_accounting(datetime.datetime.now(datetime.timezone.utc),
                                                         meter_value_to_use,
+                                                        meter_value_export_to_use,
                                                         self._internal_cp.data.get.charge_state,
                                                         self._internal_cp.data.get.plug_state,
                                                         self._rfiddata_for_ev_activation.last_tag)
                     log.error("Detected valid EV RFID-Scan while plugged in: Starting new accounting with RFID tag"
-                              + f" '{self._rfiddata_for_ev_activation.last_tag}' and meter value {meter_value_to_use}"
+                              + f" '{self._rfiddata_for_ev_activation.last_tag}' and meter value {meter_value_to_use},"
+                              + f" export meter value {meter_value_export_to_use}"
                               + " then restting _rfiddata_for_ev_activation")
                     self._rfiddata_for_ev_activation = None
                 else:
@@ -217,12 +224,14 @@ class StatemachineYc():
             if self._rfiddata_for_ev_activation is not None:
                 self._status_handler.new_accounting(datetime.datetime.now(datetime.timezone.utc),
                                                     self._status_handler.get_cp_meter_at_last_plugin(),
+                                                    self._status_handler.get_cp_meter_export_at_last_plugin(),
                                                     self._internal_cp.data.get.charge_state,
                                                     self._internal_cp.data.get.plug_state,
                                                     self._rfiddata_for_ev_activation.last_tag)
                 log.error("Detected plugin with _rfiddata_for_ev_activation: Starting new accounting with RFID tag"
                             + f" '{self._rfiddata_for_ev_activation.last_tag}' and meter value"
-                            + f" {self._status_handler.get_cp_meter_at_last_plugin()}"
+                            + f" import {self._status_handler.get_cp_meter_at_last_plugin()},"
+                            + f" export {self._status_handler.get_cp_meter_export_at_last_plugin()}"
                             + " then resetting _rfiddata_for_ev_activation")
                 self._rfiddata_for_ev_activation = None
             else:

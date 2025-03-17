@@ -86,10 +86,12 @@ class AccountingInfo:
     charge_start: Optional[str] = None
     starting_rfid: Optional[str] = None
     meter_at_start: Optional[float] = None
+    meter_export_at_start: Optional[float] = None
     currrent_time: Optional[str] = None
     plugged_in: Optional[bool] = None
     charging: Optional[bool] = None
     current_meter: Optional[float] = None
+    current_meter_export: Optional[float] = None
 
 
 def current_timestamp_factory() -> str:
@@ -105,6 +107,7 @@ class MeterValueMark:
     timestamp: str = field(default_factory=current_timestamp_factory)
     day: int = field(default_factory=current_day_factory)
     meter_reading: Optional[float] = None
+    meter_reading_export: Optional[float] = None
 
 
 @dataclass

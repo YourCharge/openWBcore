@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from typing import Dict, List, Optional
 from control import data, yourcharge
+from control.chargepoint import chargepoint_data
 from control.yourcharge import AccountingInfo, LmStatus, MeterValueMark
 from helpermodules.pub import Pub
 
@@ -27,7 +28,11 @@ class YcStatusHandler:
         self._cp_enabled_status_topic = f"{yourcharge.yc_status_topic}/cp_enabled"
         self._cp_enabled_control_topic = f"{yourcharge.yc_control_topic}/cp_enabled"
         self._cp_meter_at_last_plugin_status_topic = f"{yourcharge.yc_status_topic}/cp_meter_at_last_plugin"
+        self._cp_meter_export_at_last_plugin_status_topic = \
+            f"{yourcharge.yc_status_topic}/cp_meter_export_at_last_plugin"
         self._cp_meter_at_last_plugin_control_topic = f"{yourcharge.yc_control_topic}/cp_meter_at_last_plugin"
+        self._cp_meter_export_at_last_plugin_control_topic = \
+            f"{yourcharge.yc_control_topic}/cp_meter_export_at_last_plugin"
         self._cp_meter_at_last_night_meter_reading_control_topic = \
             f"{yourcharge.yc_control_topic}/nightly_meter_reading"
         self._accounting_status_topic = f"{yourcharge.yc_status_topic}/accounting"
@@ -55,29 +60,31 @@ class YcStatusHandler:
             self._changed_keys.clear()
 
     # RFID scan
-    def new_accounting(self, start_timestamp: datetime.datetime, meter_reading: float, charging: bool,
-                       plugged: bool, rfid_tag: str) -> None:
+    def new_accounting(self, start_timestamp: datetime.datetime, meter_reading: float, meter_reading_export: float,
+                       charging: bool, plugged: bool, rfid_tag: str) -> None:
         self._accounting_info_cache = AccountingInfo(
             charge_start=f"{start_timestamp.isoformat()}",
             currrent_time=f"{start_timestamp.isoformat()}",
             meter_at_start=meter_reading,
+            meter_export_at_start=meter_reading_export,
             current_meter=meter_reading,
+            current_meter_export=meter_reading_export,
             charging=charging,
             plugged_in=plugged, starting_rfid=rfid_tag)
         self._update(yourcharge.yc_accounting_control_topic, dataclasses.asdict(self._accounting_info_cache))
         if self._accounting_info_cache.starting_rfid is not None and self._accounting_info_cache.starting_rfid != "":
             self._update(self._accounting_status_topic, dataclasses.asdict(self._accounting_info_cache))
 
-    def end_accounting(self, update_timestamp: datetime.datetime, final_meter: float):
+    def end_accounting(self, update_timestamp: datetime.datetime, final_meter: float, final_meter_export: float):
         log.info(f"Finishing accounting at: {update_timestamp} with meter value '{final_meter}'")
-        self.update_accounting(update_timestamp, final_meter, False, False)
+        self.update_accounting(update_timestamp, final_meter, final_meter_export, False, False)
         # empty accounting info cache and clear the control topic (not the status topic!) such that
         # in case of reboot no old data is restored
         self._accounting_info_cache = None
         Pub().pub(yourcharge.yc_accounting_control_topic, "")
 
-    def update_accounting(self, update_timestamp: datetime.datetime, current_meter: float, charging: bool,
-                          plugged: bool) -> None:
+    def update_accounting(self, update_timestamp: datetime.datetime, current_meter: float, current_meter_export: float,
+                          charging: bool, plugged: bool) -> None:
 
         # if we have no accounting info to update, just exit
         if self._accounting_info_cache is None:
@@ -94,10 +101,17 @@ class YcStatusHandler:
             else:
                 self._accounting_info_cache.meter_at_start = current_meter
 
+            if data.data.yc_data.data.yc_control.cp_meter_export_at_last_plugin is not None:
+                self._accounting_info_cache.meter_export_at_start = \
+                    data.data.yc_data.data.yc_control.cp_meter_export_at_last_plugin
+            else:
+                self._accounting_info_cache.meter_export_at_start = current_meter_export
+
         self._accounting_info_cache.charging = charging
         self._accounting_info_cache.plugged_in = plugged
         self._accounting_info_cache.currrent_time = f"{update_timestamp.isoformat()}"
         self._accounting_info_cache.current_meter = current_meter
+        self._accounting_info_cache.current_meter_export = current_meter_export
         self._update(yourcharge.yc_accounting_control_topic, dataclasses.asdict(self._accounting_info_cache))
         if self._accounting_info_cache.starting_rfid is not None and self._accounting_info_cache.starting_rfid != "":
             self._update(self._accounting_status_topic, dataclasses.asdict(self._accounting_info_cache))
@@ -115,9 +129,12 @@ class YcStatusHandler:
         return self._scanned_rfid_topic in self._changed_keys
 
     # nightly meter reading
-    def update_nightly_meter_reading(self, update_timestamp: datetime.datetime, current_meter: float) -> None:
+    def update_nightly_meter_reading(self, update_timestamp: datetime.datetime, current_meter: float, \
+                                     current_meter_export: float) -> None:
         self._nightly_meter_reading_cache = MeterValueMark(timestamp=f"{update_timestamp.isoformat()}",
-                                                           meter_reading=current_meter, day=update_timestamp.day)
+                                                           meter_reading=current_meter,
+                                                           meter_reading_export=current_meter_export,
+                                                           day=update_timestamp.day)
         self._update(
             self._cp_meter_at_last_night_meter_reading_control_topic,
             dataclasses.asdict(self._nightly_meter_reading_cache))
@@ -160,14 +177,14 @@ class YcStatusHandler:
         return self._energy_charged_since_plugin_control_topic in self._changed_keys
 
     # energy charged today
-    def update_energy_charged_today(self, energy_value: float) -> None:
+    def update_energy_charged_today(self, energy_value: float, energy_value_exported: float) -> None:
 
         nightly_reading = self.get_nightly_meter_reading()
 
         # day wrap --> update the nightly energy value
         if (data.data.yc_data.data.yc_control.nightly_meter_reading.meter_reading is None) \
                 or (datetime.datetime.now().day != nightly_reading.day):
-            self.update_nightly_meter_reading(datetime.datetime.now(), energy_value)
+            self.update_nightly_meter_reading(datetime.datetime.now(), energy_value, energy_value_exported)
 
         self._update(self._energy_charged_today_status_topic, energy_value - nightly_reading.meter_reading)
 
@@ -178,15 +195,23 @@ class YcStatusHandler:
         return self._energy_charged_today_status_topic in self._changed_keys
 
     # CP meter at last plugin
-    def update_cp_meter_at_last_plugin(self, meter_value: float) -> None:
-        self._update(self._cp_meter_at_last_plugin_control_topic, meter_value)
-        self._update(self._cp_meter_at_last_plugin_status_topic, meter_value)
+    def update_cp_meter_at_last_plugin(self, meter_value: chargepoint_data.Get) -> None:
+        self._update(self._cp_meter_at_last_plugin_control_topic, meter_value.imported)
+        self._update(self._cp_meter_export_at_last_plugin_control_topic, meter_value.exported)
+        self._update(self._cp_meter_at_last_plugin_status_topic, meter_value.imported)
+        self._update(self._cp_meter_export_at_last_plugin_status_topic, meter_value.exported)
 
     def get_cp_meter_at_last_plugin(self) -> float:
         return self._get_status(self._cp_meter_at_last_plugin_status_topic)
 
     def has_changed_cp_meter_at_last_plugin(self) -> bool:
         return self._cp_meter_at_last_plugin_status_topic in self._changed_keys
+
+    def get_cp_meter_export_at_last_plugin(self) -> float:
+        return self._get_status(self._cp_meter_export_at_last_plugin_status_topic)
+
+    def has_changed_cp_meter_export_at_last_plugin(self) -> bool:
+        return self._cp_meter_export_at_last_plugin_status_topic in self._changed_keys
 
     # heartbeat
     def update_heartbeat_ok(self, hearbeat: bool) -> None:
