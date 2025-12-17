@@ -345,12 +345,12 @@ class ControlAlgorithmYc:
                 charging_phase_infos.is_charging |= True
                 charging_phase_infos.charging_on_phase_list[i] = True
                 charging_phase_infos.number_of_charging_phases = charging_phase_infos.number_of_charging_phases + 1
-                if yc_control.total_current_consumption[i] > \
+                if yc_control.total_current_consumption[i] >= \
                         charging_phase_infos.total_current_of_charging_phase_with_maximum_total_current:
                     charging_phase_infos.total_current_of_charging_phase_with_maximum_total_current = \
                         yc_control.total_current_consumption[i]
                     charging_phase_infos.charging_phase_with_maximum_total_current = i
-                if yc_control.charging_vehicles[i] > charging_phase_infos.charging_ev_adjusted_for_this_cp:
+                if yc_control.charging_vehicles[i] >= charging_phase_infos.charging_ev_adjusted_for_this_cp:
                     charging_phase_infos.charging_ev_adjusted_for_this_cp = yc_control.charging_vehicles[i]
             if phase_charge_current > charging_phase_infos.current_of_charging_phase_with_maximum_current:
                 charging_phase_infos.current_of_charging_phase_with_maximum_current = phase_charge_current
@@ -372,12 +372,12 @@ class ControlAlgorithmYc:
                 for i, charging_on_phase in enumerate(self._previous_charging_phase_info):
                     if charging_on_phase:
                         previous_number_of_charging_phases = previous_number_of_charging_phases + 1
-                        if yc_control.total_current_consumption[i] > \
+                        if yc_control.total_current_consumption[i] >= \
                                 charging_phase_infos.total_current_of_charging_phase_with_maximum_total_current:
                             charging_phase_infos.total_current_of_charging_phase_with_maximum_total_current = \
                                 yc_control.total_current_consumption[i]
                             charging_phase_infos.charging_phase_with_maximum_total_current = i
-                        if yc_control.charging_vehicles[i] > charging_phase_infos.charging_ev_adjusted_for_this_cp:
+                        if yc_control.charging_vehicles[i] >= charging_phase_infos.charging_ev_adjusted_for_this_cp:
                             charging_phase_infos.charging_ev_adjusted_for_this_cp = yc_control.charging_vehicles[i]
                 charging_phase_infos.number_of_charging_phases = previous_number_of_charging_phases
 
@@ -391,9 +391,9 @@ class ControlAlgorithmYc:
                         charging_phase_infos.total_current_of_charging_phase_with_maximum_total_current = total_current
                         charging_phase_infos.charging_phase_with_maximum_total_current = i
 
-        # ultimate check: raise
+        # ultimate check: if we didn't find any maximum current (e.g. if all phases are 0.0000 A) simply assume L1
         if charging_phase_infos.charging_phase_with_maximum_total_current == -1:
-            raise ValueError("Didn't set charging_phase_with_maximum_total_current")
+            charging_phase_infos.charging_phase_with_maximum_total_current = 1
 
         # if we have no charging vehicles at all, assume ourself as charging (and avoid dev/0 error)
         if charging_phase_infos.charging_ev_adjusted_for_this_cp == 0:
