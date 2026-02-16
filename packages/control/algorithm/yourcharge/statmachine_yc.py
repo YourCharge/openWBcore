@@ -294,7 +294,7 @@ class StatemachineYc():
 
         if not self._internal_cp.data.get.plug_state:
             self._status_handler.update_cp_enabled(False)
-            self._status_handler.end_accounting(datetime.datetime.now(datetime.timezone.utc), self._internal_cp.data.get.imported)
+            self._status_handler.end_accounting(datetime.datetime.now(datetime.timezone.utc), self._internal_cp.data.get.imported, self._internal_cp.data.get.exported)
             self._set_current("Detected unplug while in EV charge", 0.0, yourcharge.LmStatus.DownByDisable)
             self._state_change("Detected unplug while in EV charge", LoadControlState.Idle)
             return
