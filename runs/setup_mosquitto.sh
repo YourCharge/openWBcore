@@ -150,11 +150,12 @@ else
 fi
 
 echo "mosquitto acl configuration..."
-if versionMatch "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl"; then
+if versionMatch "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl" && yourChargeVersionMatch "${SRC}/yc_mosquitto.acl" "/etc/mosquitto/mosquitto.acl"; ; then
 	echo "mosquitto acl already up to date"
 else
 	echo "updating mosquitto acl"
 	sudo cp "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl"
+	sudo bash -c "cat \"${OPENWBBASEDIR}/data/config/mosquitto/yc_mosquitto.acl\" >> \"/etc/mosquitto/mosquitto.acl\""
 	sudo chown mosquitto:mosquitto "/etc/mosquitto/mosquitto.acl"
 	sudo chmod 700 "/etc/mosquitto/mosquitto.acl"
 	restartService=1
@@ -198,11 +199,12 @@ else
 	sudo cp -a "${SRC}/mosquitto_local.conf" "/etc/mosquitto/mosquitto_local.conf"
 	restartService=1
 fi
-if versionMatch "${SRC}/openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_local.conf"; then
+if versionMatch "${SRC}/openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_local.conf" && yourChargeVersionMatch "${SRC}/yc_openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_local.conf"; then
 	echo "mosquitto openwb_local.conf already up to date"
 else
 	echo "updating mosquitto openwb_local.conf"
 	sudo cp -a "${SRC}/openwb_local.conf" "/etc/mosquitto/conf_local.d/"
+	sudo bash -c "cat \"${OPENWBBASEDIR}/data/config/mosquitto/yc_openwb_local.conf\" >> \"/etc/mosquitto/conf_local.d/openwb_local.conf\""
 	restartService=1
 fi
 if ((restartService == 1 && automaticServiceRestart == 1)); then
