@@ -1,9 +1,8 @@
 <template>
 	<div class="pricesettings">
-		<div class="grapharea">
-			<p>Anbieter: {{ etData.etProvider }}</p>
+		<div class="grapharea rounded shadow p-2">
 			<figure id="pricechart">
-				<svg viewBox="0 0 400 300">
+				<svg viewBox="0 0 400 270">
 					<g
 						:id="chartId"
 						:origin="draw"
@@ -12,7 +11,7 @@
 				</svg>
 			</figure>
 		</div>
-		<div class="controlarea">
+		<div class="controlarea rounded shadow p-2">
 			<span class="pt-1 pb-2 d-flex justify-content-between">
 				<button
 					type="button"
@@ -161,7 +160,7 @@ const plotdata = computed(() => {
 })
 const barwidth = computed(() => {
 	if (plotdata.value.length > 1) {
-		return (width - margin.left - margin.right) / plotdata.value.length - 1
+		return (width - margin.left - margin.right) / plotdata.value.length
 	} else {
 		return 0
 	}
@@ -205,13 +204,16 @@ const linePath = computed(() => {
 	]
 	return generator(points as [number, number][])
 })
-
 const xAxisGenerator = computed(() => {
 	return axisBottom<Date>(xScale.value)
 		.ticks(plotdata.value.length)
 		.tickSize(5)
 		.tickSizeInner(-height)
-		.tickFormat((d) => (d.getHours() % 6 == 0 ? timeFormat('%H:%M')(d) : ''))
+		.tickFormat((d) =>
+			d.getHours() % 6 == 0 && d.getMinutes() == 0
+				? timeFormat('%H:%M')(d)
+				: '',
+		)
 })
 const yAxisGenerator = computed(() => {
 	return axisLeft<number>(yScale.value)
@@ -253,7 +255,11 @@ const draw = computed(() => {
 		.selectAll('.tick line')
 		.attr('stroke', 'var(--color-bg)')
 		.attr('stroke-width', (d) =>
-			(d as Date).getHours() % 6 == 0 ? '2' : '0.5',
+			(d as Date).getMinutes() == 0
+				? (d as Date).getHours() % 6 == 0
+					? '2'
+					: '0.5'
+				: '0',
 		)
 	xAxis.select('.domain').attr('stroke', 'var(--color-bg')
 	// Y Axis
@@ -323,30 +329,36 @@ onMounted(() => {
 .pricesettings {
 	display: grid;
 	grid-template-columns: 50% 50%;
-	grid-template-rows: 340px;
+	grid-template-rows: 310px;
 }
 .grapharea {
 	display: flex;
 	flex-direction: column;
-	justify-content: space-between;
+	justify-content: top;
 	align-items: stretch;
 	min-width: 0px;
 	overflow: hidden;
 	height: 100%;
+	margin-right: 5px;
+	border: 1px solid var(--color-frame);
+	border-radius: 30px;
 }
 .controlarea {
 	display: flex;
 	flex-direction: column;
-	justify-content: space-between;
+	justify-content: center;
 	align-items: stretch;
 	min-width: 0px;
 	overflow: hidden;
 	height: 100%;
 	padding-left: 20px;
 	padding-right: 10px;
+	margin-left: 5px;
+	border: 1px solid var(--color-frame);
+	border-radius: 30px;
 }
 .sliderarea {
-	margin-bottom: 45px;
+	margin-bottom: 5px;
 }
 .subtitle {
 	font-size: var(--font-settings);

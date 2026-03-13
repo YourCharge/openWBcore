@@ -1,3 +1,5 @@
+var credentialsFetched = false;
+
 /**
  * Functions to update graph and gui values via MQTT-messages
  */
@@ -73,13 +75,17 @@ function setIframeSource() {
 		} else {
 			// load primary display (from primary or secondary openWB)
 			host = location.host;
+			const searchParams = new URLSearchParams(location.search);
 
 			if (data["openWB/optional/int_display/only_local_charge_points"]) {
-				const searchParams = new URLSearchParams(location.search);
 				if (searchParams.has("data")) {
 					query.append("data", searchParams.get("data"));
 				}
 			}
+			if (credentialsFetched) {
+				query.append("hide_login", "1");
+			}
+
 			destination = `${location.protocol}//${host}/openWB/web/display/themes/${theme}/?${query.toString()}`;
 
 			var request = new XMLHttpRequest();
@@ -114,10 +120,18 @@ function setIframeSource() {
 	}
 }
 
-function addLog(message) {
-	const logElement = document.querySelector('#log');
-	logElement.insertAdjacentHTML("beforeend", "<br />");
-	logElement.insertAdjacentText("beforeend", message);
+function addLog(message, forceDisplay = false) {
+	const logElement = document.getElementById('log');
+	let displayedMessages = logElement.innerHTML.split("\n");
+	if (displayedMessages.length > 25) {
+		displayedMessages.shift();
+	}
+	displayedMessages.push(message);
+	logElement.innerHTML = displayedMessages.join("\n");
+	if (forceDisplay) {
+		logElement.classList.remove("hide");
+	}
+	logElement.scrollTo(0, logElement.scrollHeight); // Scroll to the last element
 }
 
 function handleMessage(topic, payload) {
@@ -133,16 +147,34 @@ function handleMessage(topic, payload) {
 	} else {
 		document.getElementById("update").classList.add("hide");
 	}
-	if (topic.match(/^openwb\/system\//i)) { processSystemTopics(topic, payload); }
-	setIframeSource();
-}  // end handleMessage
-
-function processSystemTopics(topic, payload) {
-	// processes topic for topic openWB/system
-	// called by handleMessage
-	if (topic == 'openWB/system/reloadDisplay') {
-		if (payload == '1') {
-			reloadDisplay();
+	if (topic === "openWB/system/security/user_management_active") {
+		if (data["openWB/system/security/user_management_active"] === true) {
+			console.debug("user management is active, fetching mqtt credentials from storage");
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", "/openWB/runs/dynsec_helper/display.php", false); // synchroner Request
+			xhr.send();
+			if (xhr.status === 200) {
+				try {
+					var credentials = JSON.parse(xhr.responseText);
+					setCookie("mqtt", `${credentials.username}:${credentials.password}`);
+					credentialsFetched = true;
+					addLog(`Using mqtt credentials from storage: ${credentials.username.charAt(0)}... / ${credentials.password.charAt(0)}...`);
+					if (credentials.username === "admin" && credentials.password === "openwb") {
+						console.warn("Using default mqtt credentials!");
+						addLog("Warnung: Es werden die Standard MQTT Anmeldedaten verwendet!", true);
+					}
+				} catch (e) {
+					console.debug("Fehler beim Parsen der Credentials:", e);
+					deleteCookie("mqtt");
+				}
+			} else {
+				console.debug("no credentials for client found, using existing cookie if available");
+			}
+		} else {
+			deleteCookie("mqtt");
+			credentialsFetched = false;
+			addLog("User management inactive, using anonymous mqtt connection");
 		}
 	}
-}
+	setIframeSource();
+}  // end handleMessage

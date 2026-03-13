@@ -1,5 +1,5 @@
 <template>
-	<svg x="0" :width="props.width">
+	<svg x="0" :width="props.width" class="PGSoc">
 		<g>
 			<path
 				:id="'soc-' + vID"
@@ -117,11 +117,11 @@ const cpColor = computed(() => {
 const nameX = computed(() => {
 	switch (props.order) {
 		case 0:
-			return 3 // first vehicle
+			return 3 // x position of first vehicle
 		case 1:
-			return props.width - 3 // 2nd vehicle
+			return props.width - 3 // x position of 2nd vehicle
 		case 2:
-			return props.width / 2 // battery
+			return props.width / 2 // x position of battery
 		default:
 			return 0 // error
 	}
@@ -179,7 +179,7 @@ const autozoom = computed(() => {
 					yScale.value(
 						props.order == 2
 							? d.batSoc
-							: props.order == 1
+							: props.order == 0
 								? d['soc' + topVehicles.value[0]]
 								: d['soc' + topVehicles.value[1]!],
 					) ?? yScale.value(0),
