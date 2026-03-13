@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Tuple, Union
 from helpermodules.logger import ModifyLoglevelContext
+from modules.chargepoints.internal_openwb.config import InternalChargepointMode
 from modules.common.fault_state import FaultState
 from modules.common.hardware_check import SeriesHardwareCheckMixin
 
@@ -30,6 +31,7 @@ CP1_METERS = [meter_config(mpm3pm.Mpm3pm, modbus_id=6),
               meter_config(algodue.Algodue, modbus_id=0x9c)]
 
 EVSE_ID_CP0 = [1]
+EVSE_ID_SE_CP0 = [11]
 EVSE_ID_TWO_BUSSES_CP1 = [1, 2]
 EVSE_ID_ONE_BUS_CP1 = [2]
 EVSE_MIN_FIRMWARE = 7
@@ -96,15 +98,17 @@ class ClientHandler(SeriesHardwareCheckMixin):
             return 15
 
 
-def client_factory(local_charge_point_num: int,
+def client_factory(mode: InternalChargepointMode,
+                   local_charge_point_num: int,
                    fault_state: FaultState,
                    created_client_handler: Optional[ClientHandler] = None) -> ClientHandler:
     serial_client, evse_ids = get_modbus_client(
-        local_charge_point_num, created_client_handler)
+        mode, local_charge_point_num, created_client_handler)
     return ClientHandler(local_charge_point_num, serial_client, evse_ids, fault_state)
 
 
-def get_modbus_client(local_charge_point_num: int,
+def get_modbus_client(mode: InternalChargepointMode,
+                      local_charge_point_num: int,
                       created_client_handler: Optional[ClientHandler] = None):
     tty_devices = list(Path("/dev/serial/by-path").glob("*"))
     log.debug("tty_devices"+str(tty_devices))
@@ -123,7 +127,10 @@ def get_modbus_client(local_charge_point_num: int,
             with ModifyLoglevelContext(log, logging.DEBUG):
                 log.debug("LP0 Device: "+str(resolved_devices[0]))
             serial_client = ModbusSerialClient_(resolved_devices[0])
-            evse_ids = EVSE_ID_CP0
+            if mode == InternalChargepointMode.SE:
+                evse_ids = EVSE_ID_SE_CP0
+            else:
+                evse_ids = EVSE_ID_CP0
         else:
             # Don't create two clients for one source!
             with ModifyLoglevelContext(log, logging.DEBUG):
