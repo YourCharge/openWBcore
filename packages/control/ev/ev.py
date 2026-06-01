@@ -63,6 +63,7 @@ class Get:
     force_soc_update: bool = field(default=False, metadata={
                                    "topic": "get/force_soc_update"})
     range: Optional[float] = field(default=None, metadata={"topic": "get/range"})
+    odometer: Optional[float] = field(default=None, metadata={"topic": "get/odometer"})
     fault_state: int = field(default=0, metadata={"topic": "get/fault_state"})
     fault_str: str = field(default=NO_ERROR, metadata={"topic": "get/fault_str"})
 
@@ -276,8 +277,9 @@ class Ev:
         all_surplus = data.data.counter_all_data.get_evu_counter().get_usable_surplus(feed_in_yield)
         required_surplus = control_parameter.min_current * max_phases_ev * 230 - get_power
         unbalanced_load_limit_reached = limit.limiting_value == LimitingValue.UNBALANCED_LOAD
-        condition_1_to_3 = (((get_medium_charging_current(get_currents) > max_current_range and
-                            all_surplus > required_surplus) or unbalanced_load_limit_reached) and
+        current_limit_reached = limit.limiting_value == LimitingValue.CURRENT
+        condition_1_to_3 = ((((get_medium_charging_current(get_currents) > max_current_range or current_limit_reached)
+                            and all_surplus > required_surplus) or unbalanced_load_limit_reached) and
                             phases_in_use == 1)
         condition_3_to_1 = get_medium_charging_current(
             get_currents) < min_current_range and all_surplus <= 0 and phases_in_use > 1
@@ -427,27 +429,30 @@ class Ev:
                 control_parameter.timestamp_phase_switch_buffer_start = None
                 return True, None
 
-    def reset_phase_switch(self, control_parameter: ControlParameter):
+    def reset_phase_switch_delay(self, control_parameter: ControlParameter, max_phases: int):
         """ Zurücksetzen der Zeitstempel und reservierten Leistung.
 
         Die Phasenumschaltung kann nicht abgebrochen werden!
         """
-        if control_parameter.state == ChargepointState.PHASE_SWITCH_DELAY:
+        control_parameter.timestamp_phase_switch_buffer_start = None
+        control_parameter.state = ChargepointState.CHARGING_ALLOWED
+        if control_parameter.state == ChargepointState.PHASE_SWITCH_DELAY and control_parameter.phases == 1:
             # Wenn der Timer läuft, ist den Control-Parametern die alte Phasenzahl hinterlegt.
+            # bei der Umschaltung 3p1p wird keine Leistung reserviert
+            evu_counter = data.data.counter_all_data.get_evu_counter()
+            reserved = max(0, control_parameter.min_current * max_phases * 230 -
+                           self.ev_template.data.max_current_single_phase * 230)
+            evu_counter.data.set.reserved_surplus -= reserved
+            log.debug(f"Zurücksetzen von {reserved}W reservierter Leistung für die Phasenumschaltung. "
+                      f"reservierte Leistung: {evu_counter.data.set.reserved_surplus} W")
+
+    def reset_phase_switch(self, control_parameter: ControlParameter):
+        if control_parameter.state == ChargepointState.PERFORMING_PHASE_SWITCH:
+            evu_counter = data.data.counter_all_data.get_evu_counter()
             if control_parameter.phases == 1:
-                reserved = control_parameter.required_current * \
-                    3 * 230 - self.ev_template.data.max_current_single_phase * 230
-                data.data.counter_all_data.get_evu_counter().data.set.reserved_surplus -= reserved
-                log.debug(
-                    "Zurücksetzen der reservierten Leistung für die Phasenumschaltung. reservierte Leistung: " +
-                    str(data.data.counter_all_data.get_evu_counter().data.set.reserved_surplus))
+                evu_counter.data.set.reserved_surplus -= self.ev_template.data.max_current_single_phase * 230
             else:
-                reserved = self.ev_template.data.max_current_single_phase * \
-                    230 - control_parameter.required_current * 3 * 230
-                data.data.counter_all_data.get_evu_counter().data.set.reserved_surplus -= reserved
-                log.debug(
-                    "Zurücksetzen der reservierten Leistung für die Phasenumschaltung. reservierte Leistung: " +
-                    str(data.data.counter_all_data.get_evu_counter().data.set.reserved_surplus))
+                evu_counter.data.set.reserved_surplus -= self.ev_template.data.max_current_single_phase * 3 * 230
 
 
 def get_ev_to_rfid(rfid: Optional[str] = None, vehicle_id: Optional[str] = None) -> Optional[int]:

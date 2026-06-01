@@ -97,6 +97,7 @@ class Log:
     soc_at_end: Optional[int] = None
     range_at_start: Optional[float] = None
     range_at_end: Optional[float] = None
+    odometer: Optional[float] = None
 
 
 def connected_vehicle_factory() -> ConnectedVehicle:
@@ -115,7 +116,7 @@ class Get:
     currents: List[float] = field(default_factory=currents_list_factory)
     daily_imported: float = 0
     daily_exported: float = 0
-    error_timestamp: int = 0
+    error_timestamp: Optional[int] = None
     evse_current: Optional[float] = None
     # kann auch zur Laufzeit geändert werden
     evse_signaling: Optional[EvseSignaling] = None
@@ -156,8 +157,7 @@ def log_factory() -> Log:
 
 @dataclass
 class Set:
-    charge_template: ChargeTemplate = field(default_factory=charge_template_factory,
-                                            metadata={"topic": "set/charge_template"})
+    charge_template: ChargeTemplate = field(default_factory=charge_template_factory)
     current: float = field(default=0, metadata={"topic": "set/current"})
     ev_prev: int = field(default=0, metadata={"topic": "set/ev_prev"})
     log: Log = field(default_factory=log_factory, metadata={"topic": "set/log"})

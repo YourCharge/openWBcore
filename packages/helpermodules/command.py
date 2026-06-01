@@ -28,7 +28,8 @@ from modules.io_devices.eebus.api import create_pub_cert_ski
 
 from helpermodules.broker import BrokerClient
 from helpermodules.data_migration.data_migration import MigrateData
-from helpermodules.measurement_logging.process_log import get_daily_log, get_monthly_log, get_yearly_log
+from helpermodules.measurement_logging.process_log import (convert_legacy_units, get_daily_log, get_monthly_log,
+                                                           get_yearly_log)
 from helpermodules.messaging import MessageType, pub_user_message
 from helpermodules.mosquitto_dynsec.mosquitto_dynsec import (generate_password_reset_token, get_user_email,
                                                              send_password_reset_to_server, verify_password_reset_token)
@@ -208,7 +209,9 @@ class Command:
         Pub().pub(f'openWB/set/io/action/{new_id}/config', device_default)
         self.max_id_io_action = new_id
         Pub().pub("openWB/set/command/max_id/io_action", self.max_id_io_action)
-        add_acl_role("io-action-<id>-access", new_id)
+        # add ACL roles for IO action access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            add_acl_role("io-action-<id>-access", new_id)
         pub_user_message(
             payload, connection_id,
             f'Neue IO-Aktion vom Typ \'{" / ".join(payload["data"]["type"])}\' mit ID \'{new_id}\' hinzugefügt.',
@@ -217,7 +220,9 @@ class Command:
     def removeIoAction(self, connection_id: str, payload: dict) -> None:
         if self.max_id_io_action >= payload["data"]["id"]:
             ProcessBrokerBranch(f'io/action/{payload["data"]["id"]}/').remove_topics()
-            remove_acl_role("io-action-<id>-access", payload["data"]["id"])
+            # remove ACL roles for IO action access, if user management is active
+            if SubData.system_data["system"].data["security"]["user_management_active"]:
+                remove_acl_role("io-action-<id>-access", payload["data"]["id"])
             pub_user_message(payload, connection_id, f'IO-Aktion mit ID \'{payload["data"]["id"]}\' gelöscht.',
                              MessageType.SUCCESS)
         else:
@@ -238,9 +243,11 @@ class Command:
         Pub().pub(f'openWB/set/system/io/{new_id}/config', device_default)
         self.max_id_io_device = new_id
         Pub().pub("openWB/set/command/max_id/io_device", self.max_id_io_device)
-        add_acl_role("io-device-<id>-access", new_id)
-        if device_default["output"]["digital"] or device_default["output"]["analog"]:
-            add_acl_role("io-device-<id>-write-access", new_id)
+        # add ACL roles for IO device access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            add_acl_role("io-device-<id>-access", new_id)
+            if device_default["output"]["digital"] or device_default["output"]["analog"]:
+                add_acl_role("io-device-<id>-write-access", new_id)
         pub_user_message(
             payload, connection_id,
             f'Neues IO-Gerät vom Typ \'{payload["data"]["type"]}\' mit ID \'{new_id}\' hinzugefügt.',
@@ -252,8 +259,10 @@ class Command:
         if self.max_id_io_device >= payload["data"]["id"]:
             ProcessBrokerBranch(f'system/io/{payload["data"]["id"]}/').remove_topics()
             ProcessBrokerBranch(f'io/states/{payload["data"]["id"]}/').remove_topics()
-            remove_acl_role("io-device-<id>-access", payload["data"]["id"])
-            remove_acl_role("io-device-<id>-write-access", payload["data"]["id"])
+            # remove ACL roles for IO device access, if user management is active
+            if SubData.system_data["system"].data["security"]["user_management_active"]:
+                remove_acl_role("io-device-<id>-access", payload["data"]["id"])
+                remove_acl_role("io-device-<id>-write-access", payload["data"]["id"])
             pub_user_message(payload, connection_id, f'IO-Gerät mit ID \'{payload["data"]["id"]}\' gelöscht.',
                              MessageType.SUCCESS)
         else:
@@ -272,15 +281,18 @@ class Command:
             charge_template = SubData.ev_charge_template_data[f"ct{SubData.ev_data['ev0'].data.charge_template}"]
             charge_template = dataclass_utils.asdict(charge_template.data)
             Pub().pub(f'openWB/chargepoint/{new_id}/set/charge_template', charge_template)
+            Pub().pub(f'openWB/chargepoint/{new_id}/set/manual_lock', False)
             self.max_id_hierarchy = self.max_id_hierarchy + 1
             Pub().pub("openWB/set/command/max_id/hierarchy", self.max_id_hierarchy)
             if self.max_id_chargepoint_template == -1:
                 self.addChargepointTemplate("addChargepoint", {})
             if self.max_id_vehicle == -1:
                 self.addVehicle("addChargepoint", {})
-            add_acl_role("chargepoint-<id>-access", new_id)
-            if chargepoint_config["type"] == "mqtt":
-                add_acl_role("chargepoint-<id>-write-access", new_id)
+            # add ACL roles for charge point access, if user management is active
+            if SubData.system_data["system"].data["security"]["user_management_active"]:
+                add_acl_role("chargepoint-<id>-access", new_id)
+                if chargepoint_config["type"] == "mqtt":
+                    add_acl_role("chargepoint-<id>-write-access", new_id)
             pub_user_message(payload, connection_id, f'Neuer Ladepunkt mit ID \'{new_id}\' wurde erstellt.',
                              MessageType.SUCCESS)
         new_id = self.max_id_hierarchy + 1
@@ -385,8 +397,10 @@ class Command:
                         break
                 else:
                     remove_display_user(cp_ip)
-        remove_acl_role("chargepoint-<id>-access", cp_id)
-        remove_acl_role("chargepoint-<id>-write-access", cp_id)
+        # remove ACL roles for charge point access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            remove_acl_role("chargepoint-<id>-access", cp_id)
+            remove_acl_role("chargepoint-<id>-write-access", cp_id)
         ProcessBrokerBranch(f'chargepoint/{cp_id}/').remove_topics()
         data.data.counter_all_data.hierarchy_remove_item(cp_id, ComponentType.CHARGEPOINT)
         Pub().pub("openWB/set/counter/get/hierarchy", data.data.counter_all_data.data.get.hierarchy)
@@ -678,7 +692,9 @@ class Command:
         self.max_id_hierarchy = self.max_id_hierarchy + 1
         Pub().pub("openWB/set/command/max_id/hierarchy",
                   self.max_id_hierarchy)
-        add_acl_role(f"{general_type.value}-<id>-access", new_id)
+        # add ACL roles for component access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            add_acl_role(f"{general_type.value}-<id>-access", new_id)
         pub_user_message(
             payload, connection_id,
             f'Neue Komponente vom Typ \'{payload["data"]["type"]}\' mit ID \'{new_id}\' hinzugefügt.',
@@ -692,10 +708,12 @@ class Command:
                       "Die ID ist größer als die maximal vergebene ID.", MessageType.ERROR)
         branch = f'system/device/{payload["data"]["deviceId"]}/component/{payload["data"]["id"]}/'
         ProcessBrokerBranch(branch).remove_topics()
-        remove_acl_role(f"{special_to_general_type_mapping(payload['data']['type']).value}-<id>-access",
-                        payload["data"]["id"])
-        remove_acl_role(f"{special_to_general_type_mapping(payload['data']['type']).value}-<id>-write-access",
-                        payload["data"]["id"])
+        # remove ACL roles for component access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            remove_acl_role(f"{special_to_general_type_mapping(payload['data']['type']).value}-<id>-access",
+                            payload["data"]["id"])
+            remove_acl_role(f"{special_to_general_type_mapping(payload['data']['type']).value}-<id>-write-access",
+                            payload["data"]["id"])
         pub_user_message(
             payload, connection_id,
             f'Komponente mit ID \'{payload["data"]["id"]}\' gelöscht.', MessageType.SUCCESS)
@@ -752,7 +770,9 @@ class Command:
             self.addChargeTemplate("addVehicle", {})
         if self.max_id_ev_template == -1:
             self.addEvTemplate("addVehicle", {})
-        add_acl_role("vehicle-<id>-access", new_id)
+        # add ACL roles for vehicle access, if user management is active
+        if SubData.system_data["system"].data["security"]["user_management_active"]:
+            add_acl_role("vehicle-<id>-access", new_id)
         pub_user_message(payload, connection_id, f'Neues EV mit ID \'{new_id}\' hinzugefügt.', MessageType.SUCCESS)
 
     def removeVehicle(self, connection_id: str, payload: dict) -> None:
@@ -764,8 +784,10 @@ class Command:
         if payload["data"]["id"] > 0:
             Pub().pub(f'openWB/vehicle/{payload["data"]["id"]}', "")
             ProcessBrokerBranch(f'vehicle/{payload["data"]["id"]}/').remove_topics()
-            remove_acl_role("vehicle-<id>-access", payload["data"]["id"])
-            remove_acl_role("vehicle-<id>-write-access", payload["data"]["id"])
+            # remove ACL roles for vehicle access, if user management is active
+            if SubData.system_data["system"].data["security"]["user_management_active"]:
+                remove_acl_role("vehicle-<id>-access", payload["data"]["id"])
+                remove_acl_role("vehicle-<id>-write-access", payload["data"]["id"])
             pub_user_message(
                 payload, connection_id,
                 f'EV mit ID \'{payload["data"]["id"]}\' gelöscht.', MessageType.SUCCESS)
@@ -801,15 +823,15 @@ class Command:
 
     def getDailyLog(self, connection_id: str, payload: dict) -> None:
         Pub().pub(f'openWB/set/log/daily/{payload["data"]["date"]}',
-                  get_daily_log(payload["data"]["date"]))
+                  convert_legacy_units(get_daily_log(payload["data"]["date"])))
 
     def getMonthlyLog(self, connection_id: str, payload: dict) -> None:
         Pub().pub(f'openWB/set/log/monthly/{payload["data"]["date"]}',
-                  get_monthly_log(payload["data"]["date"]))
+                  convert_legacy_units(get_monthly_log(payload["data"]["date"])))
 
     def getYearlyLog(self, connection_id: str, payload: dict) -> None:
         Pub().pub(f'openWB/set/log/yearly/{payload["data"]["date"]}',
-                  get_yearly_log(payload["data"]["date"]))
+                  convert_legacy_units(get_yearly_log(payload["data"]["date"])))
 
     def initCloud(self, connection_id: str, payload: dict) -> None:
         parent_file = Path(__file__).resolve().parents[2]

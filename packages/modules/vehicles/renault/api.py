@@ -10,7 +10,7 @@ from modules.vehicles.renault.config import RenaultConfiguration
 log = logging.getLogger(__name__)
 
 GIGYA_ROOTURL = 'https://accounts.eu1.gigya.com'
-GIGYA_API = '3_7PLksOyBRkHv126x5WhHb-5pqC1qFR8pQjxSeLB6nhAnPERTUlwnYoznHSxwX668'
+GIGYA_API = '3_VgdkgtIRH3AdHvJm-cjV2ug2EFE0lxt0IJzMC4MFqZjFpn_GYFXVdNZ19L7wZX0N'
 KAMEREON_ROOTURL = 'https://api-wired-prod-1-euw1.wrd-aws.com'
 KAMEREON_API_KEY = 'YjkKtHmGfaceeuExUDKGxrLZGGvtVS0J'
 
@@ -81,5 +81,18 @@ def fetch_soc(config: RenaultConfiguration) -> CarState:
     responsetext = response.read()
     batt = json.loads(responsetext)
 
+    # Step 9 - cockpit data for odometer/totalMileage
+    data = urllib.parse.urlencode(country_data)
+    data = data.encode('Big5')
+    reg = urllib.request.Request(KAMEREON_ROOTURL + '/commerce/v1/accounts/' +
+                                 kamereonaccountid + '/kamereon/kca/car-adapter/v1/cars/'
+                                 + vin + '/cockpit?' + data.decode("utf-8"))
+    reg.add_header('x-gigya-id_token', gigya_jwttoken)
+    reg.add_header('apikey', KAMEREON_API_KEY)
+    response = urllib.request.urlopen(reg)
+    responsetext = response.read()
+    cockpit = json.loads(responsetext)
+
     return CarState(soc=float(batt['data']['attributes']['batteryLevel']),
-                    range=float(batt['data']['attributes']['batteryAutonomy']))
+                    range=float(batt['data']['attributes']['batteryAutonomy']),
+                    odometer=float(cockpit['data']['attributes']['totalMileage']))

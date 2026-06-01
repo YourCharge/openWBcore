@@ -49,6 +49,8 @@ export default {
         "openWB/chargepoint/+/set/charge_template",
         "openWB/chargepoint/+/set/charge_template/chargemode/scheduled_charging/plans/+",
         "openWB/chargepoint/+/set/charge_template/time_charging/plans/+",
+        "openWB/chargepoint/+/get/fault_state",
+        "openWB/chargepoint/+/get/fault_str",
         "openWB/chargepoint/+/get/phases_in_use",
         "openWB/chargepoint/+/get/plug_state",
         "openWB/chargepoint/+/get/power",
@@ -64,6 +66,7 @@ export default {
         "openWB/general/chargemode_config/pv_charging/bat_mode",
         "openWB/optional/ep/configured",
         "openWB/optional/ep/get/prices",
+        "openWB/optional/int_display/only_local_charge_points",
         "openWB/optional/int_display/theme",
         "openWB/optional/int_display/standby",
         "openWB/optional/rfid/active",
@@ -192,7 +195,7 @@ export default {
       this.client.on("message", (topic, message) => {
         console.debug(`Received message "${message}" from topic "${topic}"`);
         if (message.toString().length > 0) {
-          let myPayload = undefined;
+          let myPayload;
           try {
             myPayload = JSON.parse(message.toString());
           } catch (error) {

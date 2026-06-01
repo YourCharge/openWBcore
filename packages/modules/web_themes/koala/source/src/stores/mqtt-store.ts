@@ -27,20 +27,21 @@ import type {
   VehicleChargeTarget,
   CalculatedSocState,
   SystemCommandEvent,
+  RangeValue,
 } from './mqtt-store-model';
 
 export const useMqttStore = defineStore('mqtt', () => {
   const $q = useQuasar();
-  let mqttUser = null;
-  let mqttPass = null;
+  let mqttUser: string | undefined = undefined;
+  let mqttPass: string | undefined = undefined;
   if ($q.cookies.has('mqtt')) {
     [mqttUser, mqttPass] = decodeURIComponent($q.cookies.get('mqtt'))
       ?.match(/^([^:]+):(.+)$/)
-      ?.slice(1) || [null, null];
+      ?.slice(1) || [undefined, undefined];
   }
 
   // local variables
-  let mqttClient: mqtt.MqttClient | undefined = undefined;
+  let mqttClient: mqtt.MqttClient | null = null;
   const mqttConnectionOptions: IClientOptions = {
     protocol: location.protocol == 'https:' ? 'wss' : 'ws',
     protocolVersion: 5,
@@ -61,6 +62,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   // State
   const subscriptions = ref<TopicCount>({});
   const topics = ref<TopicList>({});
+  const mqttClientConnected = ref(false);
 
   // General functions and methods for the store - BEGIN
   /**
@@ -78,11 +80,7 @@ export const useMqttStore = defineStore('mqtt', () => {
       mqttClient = mqtt.connect(connectUrl, options);
       mqttClient.on('connect', () => {
         console.debug('connected to broker');
-        $q.notify({
-          type: 'positive',
-          message: `MQTT-Verbindung hergestellt.${mqttUser ? ` Angemeldet als ${mqttUser}.` : ''}`,
-          progress: true,
-        });
+        mqttClientConnected.value = true;
         if (mqttUser === 'admin' && mqttPass === 'openwb') {
           $q.notify({
             type: 'warning',
@@ -96,6 +94,7 @@ export const useMqttStore = defineStore('mqtt', () => {
       });
       mqttClient.on('error', (error) => {
         console.error('Client error', error);
+        mqttClientConnected.value = false;
         $q.notify({
           type: 'negative',
           message:
@@ -111,7 +110,7 @@ export const useMqttStore = defineStore('mqtt', () => {
           [135, 137].includes((error as mqtt.ErrorWithReasonCode).code) &&
           mqttUser != null
         ) {
-          mqttClient.end();
+          mqttClient?.end();
           if ($q.cookies.has('mqtt')) {
             $q.cookies.remove('mqtt', { path: '/' });
             console.warn('removed mqtt cookie due to error');
@@ -122,8 +121,6 @@ export const useMqttStore = defineStore('mqtt', () => {
               progress: true,
               closeBtn: 'Seite neu laden',
               onDismiss: () => {
-                // not functional in Safari browser?
-                // this.router.go(0);
                 location.reload();
               },
             });
@@ -148,6 +145,25 @@ export const useMqttStore = defineStore('mqtt', () => {
         } else {
           removeTopic(topic);
         }
+      });
+      mqttClient.on('end', () => {
+        mqttClientConnected.value = false;
+        console.error('mqtt connection ended');
+      });
+      mqttClient.on('close', () => {
+        mqttClientConnected.value = false;
+        console.error('mqtt connection closed');
+      });
+      mqttClient.on('offline', () => {
+        mqttClientConnected.value = false;
+        console.error('mqtt connection offline');
+      });
+      mqttClient.on('disconnect', () => {
+        mqttClientConnected.value = false;
+        console.error('mqtt connection disconnected');
+      });
+      mqttClient.on('reconnect', () => {
+        console.error('mqtt connection reconnecting...');
       });
     } catch (error) {
       console.error('error connecting to broker:', error);
@@ -436,12 +452,12 @@ export const useMqttStore = defineStore('mqtt', () => {
         await mqttClient.publishAsync(topic, JSON.stringify(payload), options);
         console.debug('Publish successful', topic);
         return true;
-      } catch (error) {
+      } catch (error: Error | unknown) {
         console.error('Publish error', topic, error);
         $q.notify({
           type: 'negative',
           message: `Fehler beim Senden der Daten "${topic}"`,
-          caption: error.message,
+          caption: error instanceof Error ? error.message : String(error),
           progress: true,
         });
         return false;
@@ -677,7 +693,11 @@ export const useMqttStore = defineStore('mqtt', () => {
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         });
-        while (scale && (scaledValue > 999 || scaledValue < -999)) {
+        while (
+          scale &&
+          scaledValue &&
+          (scaledValue > 999 || scaledValue < -999)
+        ) {
           scaledValue = scaledValue / 1000;
           scaled = true;
           switch (unitPrefix) {
@@ -696,13 +716,15 @@ export const useMqttStore = defineStore('mqtt', () => {
         if (scaled) {
           outputDecimalPlaces = decimalPlaces > 0 ? decimalPlaces : 2;
         } else {
-          const hasDecimalPlaces = scaledValue !== Math.floor(scaledValue);
+          const hasDecimalPlaces = scaledValue !== Math.floor(scaledValue || 0);
           outputDecimalPlaces = hasDecimalPlaces ? decimalPlaces : 0;
         }
-        textValue = scaledValue.toLocaleString(undefined, {
-          minimumFractionDigits: outputDecimalPlaces,
-          maximumFractionDigits: outputDecimalPlaces,
-        });
+        textValue = scaledValue
+          ? scaledValue.toLocaleString(undefined, {
+              minimumFractionDigits: outputDecimalPlaces,
+              maximumFractionDigits: outputDecimalPlaces,
+            })
+          : defaultString;
       }
       return {
         textValue: `${textValue} ${unitPrefix}${unit}`,
@@ -1900,6 +1922,39 @@ export const useMqttStore = defineStore('mqtt', () => {
   };
 
   /**
+   * Get or set the battery charge priority SoC range for PV charging
+   * @returns RangeValue
+   */
+  const batteryChargePriorityRange = computed<RangeValue>({
+    get() {
+      const minSoc = getValue.value(
+        'openWB/general/chargemode_config/pv_charging/min_bat_soc',
+      ) as number | undefined;
+      const maxSoc = getValue.value(
+        'openWB/general/chargemode_config/pv_charging/max_bat_soc',
+      ) as number | undefined;
+      return {
+        min: minSoc ?? 0,
+        max: maxSoc ?? 100,
+      };
+    },
+    set(newRange: RangeValue) {
+      updateTopic(
+        'openWB/general/chargemode_config/pv_charging/min_bat_soc',
+        newRange.min,
+        undefined,
+        true,
+      );
+      updateTopic(
+        'openWB/general/chargemode_config/pv_charging/max_bat_soc',
+        newRange.max,
+        undefined,
+        true,
+      );
+    },
+  });
+
+  /**
    * Get or set the charge point connected vehicle eco energy limit identified by the charge point id
    * @param chargePointId charge point id
    * @returns object | undefined
@@ -1933,7 +1988,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   /**
    * Get or set the charge point connected vehicle eco charging max price identified by the charge point id
    * @param chargePointId charge point id
-   * @returns string | undefined
+   * @returns number | undefined
    */
   const chargePointConnectedVehicleEcoChargeMaxPrice = (
     chargePointId: number,
@@ -2011,7 +2066,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   const chargePointConnectedVehicleBidiEnabled = (chargePointId: number) => {
     return computed(() => {
       const connectedVehicleEvTemplateId =
-        chargePointConnectedVehicleConfig(chargePointId).value.ev_template;
+        chargePointConnectedVehicleConfig(chargePointId).value?.ev_template;
       return getValue.value(
         `openWB/vehicle/template/ev_template/${connectedVehicleEvTemplateId}`,
         'bidi',
@@ -2077,6 +2132,20 @@ export const useMqttStore = defineStore('mqtt', () => {
       changed_in_theme: true,
     });
   };
+
+  /**
+   * Get temporary charge settings mode selected
+   * @returns boolean
+   */
+  const temporaryChargeModeActive: ComputedRef<boolean> = computed(() => {
+    return (
+      getValue.value(
+        'openWB/general/temporary_charge_templates_active',
+        undefined,
+        false,
+      ) === true
+    );
+  });
 
   /**
    * Helper function to update a subtopic of a time charging plan
@@ -2449,7 +2518,7 @@ export const useMqttStore = defineStore('mqtt', () => {
         const plans = vehicleTimeChargingPlans.value(chargePointId);
         const plan = plans.find((plane) => plane.id === planId);
         const current = plan?.dc_current;
-        const power = convertDcCurrentToPower(current);
+        const power = convertDcCurrentToPower(current ?? 0);
         const valueObject = getValueObject.value(power, 'W', '', true);
         return valueObject.scaledValue;
       },
@@ -2576,7 +2645,7 @@ export const useMqttStore = defineStore('mqtt', () => {
    * @returns string || undefined
    */
   const batteryName = computed(() => {
-    return (batteryId: number): string => {
+    return (batteryId: number): string | undefined => {
       const configurations = getWildcardValues.value(
         `openWB/system/device/+/component/${batteryId}/config`,
       ) as { [key: string]: BatteryConfiguration };
@@ -3567,7 +3636,7 @@ export const useMqttStore = defineStore('mqtt', () => {
         const plans = vehicleScheduledChargingPlans.value(chargePointId);
         const plan = plans.find((plan) => plan.id === planId);
         const current = plan?.dc_current;
-        const power = convertDcCurrentToPower(current);
+        const power = convertDcCurrentToPower(current ?? 0);
         const valueObject = getValueObject.value(power, 'W', '', true);
         return valueObject.scaledValue;
       },
@@ -3640,7 +3709,7 @@ export const useMqttStore = defineStore('mqtt', () => {
    * @returns string
    */
   const getComponentName = computed(() => {
-    return (componentId: number): string => {
+    return (componentId: number): string | undefined => {
       const configurations = getWildcardValues.value(
         `openWB/system/device/+/component/${componentId}/config`,
       ) as { [key: string]: CounterConfiguration };
@@ -3881,6 +3950,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   return {
     topics,
     subscriptions,
+    mqttClientConnected,
     initialize,
     updateTopic,
     updateState: updateTopic, // alias for compatibility with older code
@@ -3921,6 +3991,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     chargePointStateMessage,
     chargePointFaultState,
     chargePointFaultMessage,
+    temporaryChargeModeActive,
     chargePointChargeType,
     dcChargingEnabled,
     chargePointConnectedVehicleInfo,
@@ -4017,6 +4088,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     batteryDailyImportedTotal,
     batteryDailyExportedTotal,
     batteryTotalPower,
+    batteryChargePriorityRange,
     batteryMode,
     // Grid data
     getGridId,

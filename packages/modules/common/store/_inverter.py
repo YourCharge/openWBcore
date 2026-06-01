@@ -17,8 +17,11 @@ class InverterValueStoreRamdisk(ValueStore[InverterState]):
 
     def set(self, inverter_state: InverterState):
         self.__pv.power.write(int(inverter_state.power))
-        self.__pv.energy.write(inverter_state.exported)
-        self.__pv.energy_k.write(inverter_state.exported / 1000)
+        if inverter_state.exported is not None:
+            self.__pv.energy.write(inverter_state.exported)
+            self.__pv.energy_k.write(inverter_state.exported / 1000)
+        else:
+            log.debug("Kein gültiger Zählerstand. Wert wird nicht aktualisiert.")
         if inverter_state.currents:
             self.__pv.currents.write(inverter_state.currents)
 
@@ -50,17 +53,9 @@ class PurgeInverterState:
         self.delegate.set(state)
 
     def update(self) -> None:
-        state = self.filter_peaks(self.delegate.delegate.state)
-        state = self.fix_hybrid_values(state)
+        state = self.fix_hybrid_values(self.delegate.delegate.state)
         self.delegate.set(state)
         self.delegate.update()
-
-    def filter_peaks(self, state: InverterState) -> InverterState:
-        inverter = data.data.pv_data[f"pv{self.delegate.delegate.num}"]
-        max_ac_out = inverter.data.config.max_ac_out
-        if max_ac_out > 0 and abs(state.power) > max_ac_out:
-            state.power = max_ac_out if state.power > 0 else -max_ac_out
-        return state
 
     def fix_hybrid_values(self, state: InverterState) -> InverterState:
         children = data.data.counter_all_data.get_entry_of_element(self.delegate.delegate.num)["children"]
@@ -77,8 +72,11 @@ class PurgeInverterState:
                 for bat in hybrid:
                     bat_get = data.data.bat_data[bat].data.get
                     power -= bat_get.power
-
-                    exported += bat_get.imported - bat_get.exported - imported
+                    if (bat_get.imported is not None and bat_get.exported is not None and
+                       imported is not None and exported is not None):
+                        exported += bat_get.imported - bat_get.exported - imported
+                    else:
+                        exported = None
 
             if state.dc_power is not None:
                 # Manche Systeme werden auch aus dem Netz geladen, um einen Mindest-SoC zu halten.

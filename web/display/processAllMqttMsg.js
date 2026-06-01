@@ -77,10 +77,9 @@ function setIframeSource() {
 			host = location.host;
 			const searchParams = new URLSearchParams(location.search);
 
-			if (data["openWB/optional/int_display/only_local_charge_points"]) {
-				if (searchParams.has("data")) {
-					query.append("data", searchParams.get("data"));
-				}
+			if (searchParams.has("data")) {
+				console.warn("Detected query parameters! Forwarding data to display theme:", searchParams.get("data"));
+				query.append("data", searchParams.get("data"));
 			}
 			if (credentialsFetched) {
 				query.append("hide_login", "1");
