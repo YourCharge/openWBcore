@@ -49,7 +49,7 @@ optional_data_lock = Lock()
 pv_data_lock = Lock()
 pv_all_data_lock = Lock()
 system_data_lock = Lock()
-yc_data_lock = threading.Lock()
+yc_data_lock = Lock()
 
 
 def locked(lock: Lock):

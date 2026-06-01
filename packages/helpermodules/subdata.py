@@ -92,7 +92,7 @@ class SubData:
                  event_jobs_running: Event,
                  event_modbus_server: Event,
                  event_restart_gpio: Event,
-                 event_control_algorithm_set: threading.Event,):
+                 event_control_algorithm_set: Event,):
         self.event_ev_template = event_ev_template
         self.event_cp_config = event_cp_config
         self.event_control_algorithm_set = event_control_algorithm_set

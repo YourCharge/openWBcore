@@ -15,6 +15,20 @@ versionMatch() {
 	fi
 }
 
+yourChargeVersionMatch() {
+	file=$1
+	target=$2
+	currentVersion=$(grep -o "yc-version:[0-9]\+" "$file" | grep -o "[0-9]\+$")
+	installedVersion=$(sudo grep -o "yc-version:[0-9]\+" "$target" | grep -o "[0-9]\+$")
+	# echo "$currentVersion == $installedVersion ?"
+	if ((currentVersion == installedVersion)); then
+	    return 0
+	else
+	    return 1
+	fi
+}
+
+
 waitForServiceStop() {
 	# this function waits for a service to stop and kills the process if it takes too long
 	# this is necessary at least for mosquitto, as the service is stopped, but the process is still running
@@ -150,12 +164,12 @@ else
 fi
 
 echo "mosquitto acl configuration..."
-if versionMatch "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl" && yourChargeVersionMatch "${SRC}/yc_mosquitto.acl" "/etc/mosquitto/mosquitto.acl"; ; then
+if versionMatch "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl" && yourChargeVersionMatch "${SRC}/yc_mosquitto.acl" "/etc/mosquitto/mosquitto.acl"; then
 	echo "mosquitto acl already up to date"
 else
 	echo "updating mosquitto acl"
 	sudo cp "${SRC}/mosquitto.acl" "/etc/mosquitto/mosquitto.acl"
-	sudo bash -c "cat \"${OPENWBBASEDIR}/data/config/mosquitto/yc_mosquitto.acl\" >> \"/etc/mosquitto/mosquitto.acl\""
+	sudo bash -c "cat \"${SRC}/yc_mosquitto.acl\" >> \"/etc/mosquitto/mosquitto.acl\""
 	sudo chown mosquitto:mosquitto "/etc/mosquitto/mosquitto.acl"
 	sudo chmod 700 "/etc/mosquitto/mosquitto.acl"
 	restartService=1

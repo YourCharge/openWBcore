@@ -21,19 +21,6 @@ chmod 666 "$LOGFILE"
 		fi
 	}
 
-	yourChargeVersionMatch() {
-		file=$1
-		target=$2
-		currentVersion=$(grep -o "yc-version:[0-9]\+" "$file" | grep -o "[0-9]\+$")
-		installedVersion=$(grep -o "yc-version:[0-9]\+" "$target" | grep -o "[0-9]\+$")
-		# echo "$currentVersion == $installedVersion ?"
-		if ((currentVersion == installedVersion)); then
-			return 0
-		else
-			return 1
-		fi
-	}
-
 	if ! id -u openwb >/dev/null 2>&1; then
 		echo "user 'openwb' missing"
 		echo "starting upgrade script..."
@@ -375,4 +362,6 @@ chmod 666 "$LOGFILE"
 	echo "$(date +"%Y-%m-%d %H:%M:%S:")" "boot done :-)"
 	mosquitto_pub -p 1886 -t "openWB/system/update_in_progress" -r -m 'false'
 	mosquitto_pub -p 1886 -t "openWB/system/reloadDisplay" -m "1"
+	echo "Exiting now with code 0"
+	exit 0
 } >>"$LOGFILE" 2>&1

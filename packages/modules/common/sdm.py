@@ -2,7 +2,7 @@
 from enum import IntEnum
 import logging
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from modules.common import modbus
 from modules.common.abstract_counter import AbstractCounter
