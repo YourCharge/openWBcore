@@ -362,6 +362,4 @@ chmod 666 "$LOGFILE"
 	echo "$(date +"%Y-%m-%d %H:%M:%S:")" "boot done :-)"
 	mosquitto_pub -p 1886 -t "openWB/system/update_in_progress" -r -m 'false'
 	mosquitto_pub -p 1886 -t "openWB/system/reloadDisplay" -m "1"
-	echo "Exiting now with code 0"
-	exit 0
 } >>"$LOGFILE" 2>&1

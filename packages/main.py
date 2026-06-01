@@ -179,7 +179,6 @@ class HandlerAlgorithm:
         """ führt den YourCharge Algorithmus durch.
         """
         try:
-            @exit_after(data.data.general_data.data.control_interval)
             def handler_with_control_interval():
                 if (data.data.general_data.data.control_interval / 10) == self.interval_counter:
                     data.data.copy_data()
@@ -202,12 +201,21 @@ class HandlerAlgorithm:
                     self.interval_counter = 1
                 else:
                     self.interval_counter = self.interval_counter + 1
+
+            # In-Memory Log-Handler zurücksetzen
+            logger.clear_in_memory_log_handler("main")
+
             log.info("# ***Start*** ")
-            log.debug(f"Threads: {threading.enumerate()}")
+            # log.debug(run_command.run_shell_command("top -b -n 1 | head -n 20"))
+            # log.debug(f'Drosselung: {run_command.run_shell_command("if which vcgencmd >/dev/null; then vcgencmd get_throttled; else echo not found; fi")}')
             Pub().pub("openWB/set/system/time", timecheck.create_timestamp())
-            handler_with_control_interval()
-        except KeyboardInterrupt:
-            log.critical("Ausführung durch exit_after gestoppt: "+traceback.format_exc())
+            if not self.__acquire_lock("handler10Sec", error_threshold=30):
+                return
+            try:
+                handler_with_control_interval()
+                logger.write_logs_to_file("main")
+            finally:
+                self.__release_lock("handler10Sec")
         except Exception:
             log.exception("Fehler im Main-Modul")
 
