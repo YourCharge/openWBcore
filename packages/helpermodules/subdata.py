@@ -759,11 +759,11 @@ class SubData:
                     self.set_json_payload_class(var.data.yc_config, msg)
                     if var.data.yc_config.active:
                         self.event_control_algorithm_set.set()
-                        log.info(f"Setting YC ACTIVE mode = {var.data.yc_config.active}"
+                        log.warning(f"Setting YC ACTIVE mode = {var.data.yc_config.active}"
                                  + ": Switching to YourCharge control algorithm")
                     else:
                         self.event_control_algorithm_set.set()
-                        log.info(f"Setting YC ACTIVE mode = {var.data.yc_config.active}"
+                        log.warning(f"Setting YC ACTIVE mode = {var.data.yc_config.active}"
                                  + ": Switching to openWB control algorithm")
                 elif re.search("yourCharge/config/", msg.topic) is not None:
                     self.set_json_payload_class(var.data.yc_config, msg)
@@ -777,7 +777,7 @@ class SubData:
                     self.set_json_payload_class(var.data, msg)
         except Exception:
             traceback.print_exc()
-            log.exception("Fehler im subdata-Modul")
+            log.exception("Fehler im yourcharge/ subdata-Modul")
 
     def process_optional_topic(self, var: optional.Optional, msg: mqtt.MQTTMessage):
         """ Handler für die Optionalen-Topics

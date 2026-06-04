@@ -321,7 +321,8 @@ def schedule_jobs():
 
 
 def check_secondary_control_algorithm():
-    if event_control_algorithm_set.isSet():
+    if event_control_algorithm_set.is_set():
+        log.warning("event_control_algorithm_set.is_set()")
         # if control algorithm set event is triggered, check, which algorithm we need
         event_control_algorithm_set.clear()
         if sub.yc_data.data.yc_config.active:
@@ -332,20 +333,8 @@ def check_secondary_control_algorithm():
             if len(schedule.get_jobs("yc")) > 0:
                 log.critical("Disabling YourCharge algorithm")
                 schedule.clear("yc")
-
-
-def check_secondary_control_algorithm():
-    if event_control_algorithm_set.isSet():
-        # if control algorithm set event is triggered, check, which algorithm we need
-        event_control_algorithm_set.clear()
-        if sub.yc_data.data.yc_config.active:
-            if len(schedule.get_jobs("yc")) == 0:
-                log.critical("Enabling YourCharge algorithm")
-                [schedule.every().minute.at(f":{i:02d}").do(handler.handler10Sec_yc).tag("yc") for i in range(0, 60, 10)]
-        else:
-            if len(schedule.get_jobs("yc")) > 0:
-                log.critical("Disabling YourCharge algorithm")
-                schedule.clear("yc")
+#    else:
+#        log.warning("NOT event_control_algorithm_set.is_set()")
 
 
 try:
@@ -403,7 +392,8 @@ try:
                           event_update_soc,
                           event_soc,
                           event_jobs_running, event_modbus_server,
-                          event_control_algorithm_set, event_restart_gpio)
+                          event_restart_gpio,
+                          event_control_algorithm_set,)
     comm = command.Command(event_command_completed)
     t_sub = Thread(target=sub.sub_topics, args=(), name="Subdata")
     t_set = Thread(target=set.set_data, args=(), name="Setdata")
@@ -441,14 +431,17 @@ except Exception:
 while True:
     try:
         if event_jobs_running.is_set():
+            #log.warning("event_jobs_running.is_set()")
             if len(schedule.get_jobs("algorithm")) == 0:
                 schedule_jobs()
             if len(schedule.get_jobs("yc")) > 0:
                 schedule.clear("yc")
         elif event_jobs_running.is_set() is False:
+            #log.warning("event_jobs_running.is_set() is False")
             check_secondary_control_algorithm()
             if len(schedule.get_jobs("algorithm")) > 0:
                 schedule.clear("algorithm")
+        #log.warning("schedule.run_pending()")
         schedule.run_pending()
         time.sleep(1)
     except Exception:
