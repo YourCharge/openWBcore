@@ -322,8 +322,8 @@ def schedule_jobs():
 
 def check_secondary_control_algorithm():
     if event_control_algorithm_set.is_set():
-        log.warning("event_control_algorithm_set.is_set()")
         # if control algorithm set event is triggered, check, which algorithm we need
+        log.debug("event_control_algorithm_set.is_set()")
         event_control_algorithm_set.clear()
         if sub.yc_data.data.yc_config.active:
             if len(schedule.get_jobs("yc")) == 0:
@@ -333,8 +333,8 @@ def check_secondary_control_algorithm():
             if len(schedule.get_jobs("yc")) > 0:
                 log.critical("Disabling YourCharge algorithm")
                 schedule.clear("yc")
-#    else:
-#        log.warning("NOT event_control_algorithm_set.is_set()")
+    else:
+        log.debug("NOT event_control_algorithm_set.is_set()")
 
 
 try:
