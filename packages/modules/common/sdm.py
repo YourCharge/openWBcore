@@ -147,6 +147,9 @@ class Sdm120(Sdm):
         super().__init__(modbus_id, client)
         self.fault_state = fault_state
 
+    def get_model(self) -> Optional[str]:
+        return "Eastron SDM120"
+
     def get_power(self) -> Tuple[List[float], float]:
         # smarthome legacy
         time.sleep(0.1)

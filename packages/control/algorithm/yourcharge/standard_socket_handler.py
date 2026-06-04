@@ -299,8 +299,18 @@ class StandardSocketHandler:
         if data.data.yc_data.data.yc_config.standard_socket_installed is not None \
                 and data.data.yc_data.data.yc_config.standard_socket_installed:
             if self._standard_socket_handler is None:
-                self._standard_socket_handler = SocketMeterHandler(
-                    self._general_cp_handler.internal_chargepoint_handler.cp0_client_handler.client)
+                if self._general_cp_handler \
+                        and self._general_cp_handler.internal_chargepoint_handler \
+                        and self._general_cp_handler.internal_chargepoint_handler.cp0_client_handler \
+                        and self._general_cp_handler.internal_chargepoint_handler.cp0_client_handler.client:
+                    log.warning("Standard socket installed but no standard socket handler and Internal chargepoint "
+                                "handler client available. Will use it for the standard socket meter")
+                    self._standard_socket_handler = SocketMeterHandler(
+                        self._general_cp_handler.internal_chargepoint_handler.cp0_client_handler.client)
+                else:
+                    log.warning("Standard socket installed but no internal chargepoint handler client available."
+                                "Will try to create a new Modbus client in SocketMeterHandler")
+                    self._standard_socket_handler = SocketMeterHandler(None)
             if self._general_cp_handler.internal_chargepoint_handler is not None:
                 self._general_cp_handler.internal_chargepoint_handler.standard_socket_meter_handler = \
                     self._standard_socket_handler

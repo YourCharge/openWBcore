@@ -164,7 +164,7 @@ class InternalChargepointHandler:
                         time.sleep(0.1)
                         self.standard_socket_meter_handler.update()
                     except Exception as e:
-                        log.error(f"YC standard socket handler update() failure (ignored): {str(type(e))} {str(e)}")
+                        log.exception(f"YC standard socket handler update() failure (ignored): {str(type(e))} {str(e)}")
                 self.heartbeat = True if heartbeat_cp0 and heartbeat_cp1 else False
                 time.sleep(1.1)
         with SingleComponentUpdateContext(self.fault_state_info_cp0, update_always=False):
