@@ -12,6 +12,7 @@ from control.algorithm.yourcharge.control_algorithm_yc import ControlAlgorithmYc
 from control.algorithm.yourcharge.heartbeat_checker import HeartbeatChecker
 from control.algorithm.yourcharge.standard_socket_handler import StandardSocketHandler
 from control.algorithm.yourcharge.status_handler import YcStatusHandler
+from helpermodules import pub
 from helpermodules.subdata import SubData
 from helpermodules.pub import Pub
 from modules.internal_chargepoint_handler.internal_chargepoint_handler import GeneralInternalChargepointHandler
@@ -41,6 +42,7 @@ class StatemachineYc():
         self._internal_cp_key = key
         self._wait_for_socket_idle = False
         self._last_rfid_data: Optional[RfidData] = None
+        self._last_vehicle_id: Optional[str] = None
         self._rfiddata_for_ev_activation: Optional[RfidData] = None
         self._valid_standard_socket_tag_found = False
         self._general_cp_handler = general_chargepoint_handler
@@ -82,6 +84,14 @@ class StatemachineYc():
 
             # get data that we need
             self._last_rfid_data = SubData.internal_chargepoint_data["rfid_data"]
+            if self._internal_cp.data.get.vehicle_id is not None and self._internal_cp.data.get.vehicle_id != "" \
+                    and ((self._last_vehicle_id is None)
+                         or (self._last_vehicle_id != self._internal_cp.data.get.vehicle_id)):
+                log.error(f"Detected changed vehicle_id '{self._internal_cp.data.get.vehicle_id}': "
+                          "Using it as if it was an RFID tag, sending to openWB/set/internal_chargepoint/last_tag")
+                Pub().pub("openWB/set/internal_chargepoint/last_tag", self._internal_cp.data.get.vehicle_id)
+                # self._last_rfid_data = RfidData(last_tag=self._internal_cp.data.get.vehicle_id)
+
             if self._last_rfid_data is not None and self._last_rfid_data.last_tag != "":
                 self._rfiddata_for_ev_activation = copy.deepcopy(self._last_rfid_data)
                 log.error("Detected RFID scan: Setting _rfiddata_for_ev_activation to "
@@ -156,6 +166,7 @@ class StatemachineYc():
             self._execute_set_current()
             self._valid_standard_socket_tag_found = False
             self._previous_plug_state = self._internal_cp.data.get.plug_state
+            self._last_vehicle_id = self._internal_cp.data.get.vehicle_id
 
             # handle slow data update
             if plugin or plugout or (now_it_is - self._last_data_update_timestamp >= self._data_update_interval):
