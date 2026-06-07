@@ -125,7 +125,8 @@ class Sdm630_72(Sdm):
             powers=resp[SdmRegister.POWER_L1],
             power_factors=power_factors,
             frequency=frequency,
-            serial_number=self.serial_number
+            serial_number=self.serial_number,
+            meter_model=self.get_model()
         )
         check_meter_values(counter_state, self.fault_state)
         return counter_state
