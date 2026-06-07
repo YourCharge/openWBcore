@@ -218,8 +218,8 @@ if versionMatch "${SRC}/openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_l
 	echo "mosquitto openwb_local.conf already up to date"
 else
 	echo "updating mosquitto openwb_local.conf"
-	cat "${SRC}/openwb_local.conf" "${SRC}/data/config/mosquitto/yc_openwb_local.conf" >> "/tmp/openwb_local.conf"
-	sudo mv -a "/tmp/openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_local.conf"
+	cat "${SRC}/openwb_local.conf" "${SRC}/yc_openwb_local.conf" >> "/tmp/openwb_local.conf"
+	sudo mv "/tmp/openwb_local.conf" "/etc/mosquitto/conf_local.d/openwb_local.conf"
 	restartService=1
 fi
 if ((restartService == 1 && automaticServiceRestart == 1)); then
